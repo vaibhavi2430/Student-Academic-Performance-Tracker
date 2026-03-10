@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Academic Performance Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #3b82f6; --secondary: #10b981; --dark: #0f172a;
+            --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --danger: #ef4444;
+        }
+        body { font-family: 'Inter', sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+        .hidden { display: none !important; }
+        
+        /* Auth Layout */
+        .auth-wrapper { height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--dark); }
+        .auth-card { background: white; padding: 40px; border-radius: 12px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+
+        /* Sidebar & Navigation */
+        .sidebar { position: fixed; top: 0; left: 0; width: 250px; height: 100vh; background: var(--dark); color: white; padding: 25px; box-sizing: border-box; }
+        .sidebar h2 { color: var(--primary); font-size: 1.1rem; margin-bottom: 30px; text-align: center; letter-spacing: 1px; }
+        .sidebar button { 
+            width: 100%; margin: 8px 0; padding: 12px; border: none; background: transparent; 
+            color: #94a3b8; text-align: left; border-radius: 8px; cursor: pointer; transition: 0.3s;
+        }
+        .sidebar button:hover, .sidebar button.active { background: #1e293b; color: white; }
+        .sidebar button.active { border-left: 4px solid var(--primary); background: #1e293b; }
+
+        .main { margin-left: 250px; padding: 40px; max-width: 1000px; }
+
+        /* UI Components */
+        .card { background: var(--card); padding: 25px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #e2e8f0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        label { display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+        button.action { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 100%; transition: 0.2s; }
+        button.delete { background: #fee2e2; color: var(--danger); border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; float: right; }
+
+        /* Progress & Timer */
+        .timer-display { font-size: 4rem; font-weight: 800; text-align: center; color: var(--dark); margin: 20px 0; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        
+        .goal-status { padding: 15px; border-radius: 8px; margin-top: 15px; font-weight: bold; text-align: center; border: 1px solid transparent; }
+    </style>
+</head>
+<body>
+
+<div id="auth-container" class="auth-wrapper">
+    <div class="auth-card">
+        <h2 id="auth-title">Student Login</h2>
+        <input id="username" placeholder="Username">
+        <input id="password" type="password" placeholder="Password">
+        <div id="signup-fields" class="hidden">
+            <input id="confirm-password" type="password" placeholder="Confirm Password">
+        </div>
+        <button id="auth-btn" class="action" onclick="handleAuth()">Login</button>
+        <p style="margin-top:15px; font-size: 0.9rem;">
+            <span id="toggle-msg">New user?</span> 
+            <a href="#" onclick="toggleAuth()" id="toggle-link" style="color:var(--primary); font-weight:bold; text-decoration:none;">Create Account</a>
+        </p>
+    </div>
+</div>
+
+<div id="app" class="hidden">
+    <div class="sidebar">
+        <h2>STUDENT TRACKER</h2>
+        <button onclick="showSection('dashboard')" class="nav-btn active">Dashboard</button>
+        <button onclick="showSection('timetable')" class="nav-btn">Timetable</button>
+        <button onclick="showSection('goals')" class="nav-btn">Goal Tracker</button>
+        <button onclick="showSection('exams')" class="nav-btn">Marks Adder</button>
+        <button onclick="showSection('coding')" class="nav-btn">CodeChef History</button>
+        <button onclick="showSection('focus')" class="nav-btn">Pomodoro</button>
+        <button onclick="logout()" style="margin-top: 50px; color: var(--danger);">Logout</button>
+    </div>
+
+    <div class="main">
+        <div id="dashboard" class="section">
+            <h1>Welcome, <span id="user-display" style="color:var(--primary)">User</span></h1>
+            <div class="grid">
+                <div class="card"><h3>Average Marks</h3><div id="avgDisp" style="font-size:2.5rem; font-weight:800;">0%</div></div>
+                <div class="card"><h3>Current CGPA</h3><div id="cgpaDisp" style="font-size:2.5rem; font-weight:800; color:var(--secondary)">0.00</div></div>
+            </div>
+            <div class="card">
+                <h3>Add New Subject</h3>
+                <div style="display:flex; gap:10px;">
+                    <input id="courseName" placeholder="Subject Name" style="flex:2">
+                    <input id="courseMark" type="number" placeholder="Marks %" style="flex:1">
+                </div>
+                <button class="action" onclick="addCourse()">Save Subject</button>
+            </div>
+            <div id="courseList"></div>
+        </div>
+
+        <div id="timetable" class="section hidden">
+            <h1>Study Timetable</h1>
+            <div class="card">
+                <h3>Add New Schedule</h3>
+                <div class="grid">
+                    <div>
+                        <label>Date</label>
+                        <input id="ttDate" type="date">
+                    </div>
+                    <div>
+                        <label>Day</label>
+                        <select id="ttDay">
+                            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+                            <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Time</label>
+                        <input id="ttTime" type="time">
+                    </div>
+                    <div>
+                        <label>Subject/Task</label>
+                        <input id="ttTask" placeholder="e.g. Math Revision">
+                    </div>
+                </div>
+                <button class="action" onclick="addTimetableEntry()" style="margin-top:15px;">Add to Schedule</button>
+            </div>
+            <div class="card">
+                <h3>Weekly Schedule</h3>
+                <table>
+                    <thead>
+                        <tr><th>Date</th><th>Day</th><th>Time</th><th>Task</th><th>Action</th></tr>
+                    </thead>
+                    <tbody id="timetableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="goals" class="section hidden">
+            <h1>Target Goal Tracker</h1>
+            <div class="card">
+                <h3>Set Target CGPA (10.0 Scale)</h3>
+                <input id="targetCGPA" type="number" step="0.01" placeholder="e.g. 9.0" min="0" max="10">
+                <button class="action" onclick="analyzeGoal()">Check Performance Gap</button>
+                <div id="goalOutput" class="goal-status hidden"></div>
+            </div>
+        </div>
+
+        <div id="exams" class="section hidden">
+            <h1>Internal & External Adder</h1>
+            <div class="card">
+                <div class="grid">
+                    <div>
+                        <label>Internal (Weight: 20)</label>
+                        <input id="intM" type="number" placeholder="Obtained">
+                        <input id="intT" type="number" value="20">
+                    </div>
+                    <div>
+                        <label>External (Weight: 80)</label>
+                        <input id="extM" type="number" placeholder="Obtained">
+                        <input id="extT" type="number" value="80">
+                    </div>
+                </div>
+                <button class="action" onclick="calcCombined()">Calculate Aggregate %</button>
+                <div id="calcResult" style="margin-top:20px; font-size:1.2rem; font-weight:700; color:var(--primary)"></div>
+            </div>
+        </div>
+
+        <div id="coding" class="section hidden">
+            <h1>CodeChef Performance</h1>
+            <div class="card" style="background: #f8fafc; border: 1px dashed var(--primary);">
+                <h3>External Links</h3>
+                <div style="display:flex; gap:12px; align-items: center;">
+                    <input id="ccUsername" placeholder="CodeChef Username" style="flex:1; margin:0;">
+                    <button class="action" style="width:auto; padding: 12px 24px; background: #5755d9;" onclick="openCCProfile()">Open Profile</button>
+                    <button class="action" style="width:auto; padding: 12px 24px; background: var(--secondary);" onclick="openCCHistory()">View History</button>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Manual Contest Log</h3>
+                <div class="grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                    <input id="ccDate" type="date">
+                    <input id="ccRating" type="number" placeholder="Rating">
+                    <input id="ccStars" placeholder="Stars (e.g. 3*)">
+                </div>
+                <button class="action" onclick="addRatingRow()">Add Contest Log</button>
+                <table>
+                    <thead><tr><th>Date</th><th>Rating</th><th>Stars</th><th>Action</th></tr></thead>
+                    <tbody id="ratingTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="focus" class="section hidden">
+            <h1>Study Timer</h1>
+            <div class="card" style="text-align:center;">
+                <div class="timer-display" id="timer">25:00</div>
+                <div style="display:flex; gap:15px; justify-content:center;">
+                    <button class="action" style="max-width:120px" onclick="startTimer()">Start</button>
+                    <button class="action" style="max-width:120px; background:#64748b" onclick="pauseTimer()">Pause</button>
+                    <button class="action" style="max-width:120px; background:var(--danger)" onclick="resetTimer()">Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let courses = JSON.parse(localStorage.getItem("courses")) || [];
+    let ratings = JSON.parse(localStorage.getItem("cc_ratings")) || [];
+    let schedule = JSON.parse(localStorage.getItem("study_schedule")) || [];
+    let timerInterval, timeLeft = 1500;
+
+    /* --- Auth Logic --- */
+    function toggleAuth() {
+        const isLogin = document.getElementById("auth-title").innerText === "Student Login";
+        document.getElementById("auth-title").innerText = isLogin ? "Create Account" : "Student Login";
+        document.getElementById("signup-fields").classList.toggle("hidden");
+    }
+
+    function handleAuth() {
+        const u = document.getElementById("username").value.trim();
+        const p = document.getElementById("password").value;
+        const isL = document.getElementById("auth-title").innerText === "Student Login";
+        if (!u || !p) return alert("Fill all fields");
+        if (isL) {
+            if (localStorage.getItem(`user_${u}`) === p) { sessionStorage.setItem("activeUser", u); launchApp(); }
+            else alert("Invalid credentials");
+        } else {
+            localStorage.setItem(`user_${u}`, p); alert("Registered!"); toggleAuth();
+        }
+    }
+
+    function launchApp() {
+        document.getElementById("auth-container").classList.add("hidden");
+        document.getElementById("app").classList.remove("hidden");
+        document.getElementById("user-display").innerText = sessionStorage.getItem("activeUser");
+        renderDashboard();
+        renderRatings();
+        renderTimetable();
+    }
+
+    function logout() { sessionStorage.clear(); location.reload(); }
+
+    /* --- Navigation --- */
+    function showSection(id) {
+        document.querySelectorAll(".section").forEach(s => s.classList.add("hidden"));
+        document.getElementById(id).classList.remove("hidden");
+        document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+        if(event) event.currentTarget.classList.add("active");
+    }
+
+    /* --- Dashboard Logic --- */
+    function addCourse() {
+        const name = document.getElementById("courseName").value.trim();
+        const mark = parseInt(document.getElementById("courseMark").value);
+        if (!name || isNaN(mark)) return;
+        courses.push({ id: Date.now(), name, mark });
+        localStorage.setItem("courses", JSON.stringify(courses));
+        renderDashboard();
+    }
+
+    function renderDashboard() {
+        const list = document.getElementById("courseList");
+        list.innerHTML = "";
+        let total = 0;
+        courses.forEach(c => {
+            total += c.mark;
+            list.innerHTML += `<div class="card">
+                <button class="delete" onclick="removeCourse(${c.id})">Delete</button>
+                <strong>${c.name}</strong>: ${c.mark}%
+            </div>`;
+        });
+        const avg = courses.length ? (total / courses.length).toFixed(1) : 0;
+        document.getElementById("avgDisp").innerText = avg + "%";
+        document.getElementById("cgpaDisp").innerText = (avg / 10).toFixed(2);
+    }
+
+    function removeCourse(id) {
+        courses = courses.filter(c => c.id !== id);
+        localStorage.setItem("courses", JSON.stringify(courses));
+        renderDashboard();
+    }
+
+    /* --- Timetable Logic --- */
+    function addTimetableEntry() {
+        const date = document.getElementById("ttDate").value;
+        const day = document.getElementById("ttDay").value;
+        const time = document.getElementById("ttTime").value;
+        const task = document.getElementById("ttTask").value.trim();
+        if (!date || !time || !task) return alert("Please fill in all fields");
+
+        schedule.push({ id: Date.now(), date, day, time, task });
+        localStorage.setItem("study_schedule", JSON.stringify(schedule));
+        renderTimetable();
+        document.getElementById("ttTask").value = "";
+    }
+
+    function renderTimetable() {
+        const body = document.getElementById("timetableBody");
+        body.innerHTML = "";
+        schedule.sort((a, b) => new Date(a.date + ' ' + a.time) - new Date(b.date + ' ' + b.time)).forEach(item => {
+            body.innerHTML += `<tr>
+                <td>${item.date}</td><td>${item.day}</td><td>${item.time}</td>
+                <td><strong>${item.task}</strong></td>
+                <td><button class="delete" style="float:none;" onclick="deleteSchedule(${item.id})">Remove</button></td>
+            </tr>`;
+        });
+    }
+
+    function deleteSchedule(id) {
+        schedule = schedule.filter(i => i.id !== id);
+        localStorage.setItem("study_schedule", JSON.stringify(schedule));
+        renderTimetable();
+    }
+
+    /* --- Goal Tracker --- */
+    function analyzeGoal() {
+        const target = parseFloat(document.getElementById("targetCGPA").value);
+        const current = parseFloat(document.getElementById("cgpaDisp").innerText);
+        const output = document.getElementById("goalOutput");
+        output.classList.remove("hidden");
+        if (isNaN(target)) return alert("Please enter a target CGPA");
+        const diff = (target - current).toFixed(2);
+        if (current >= target) {
+            output.innerText = "Goal Achieved!";
+            output.style.backgroundColor = "#ecfdf5"; output.style.color = "#059669";
+        } else {
+            output.innerText = `Gap to target: ${diff} points.`;
+            output.style.backgroundColor = "#fff7ed"; output.style.color = "#ea580c";
+        }
+    }
+
+    /* --- CodeChef Logic --- */
+    function openCCProfile() {
+        const user = document.getElementById("ccUsername").value.trim();
+        if (user) window.open(`https://www.codechef.com/users/${user}`, '_blank');
+    }
+
+    function openCCHistory() {
+        const user = document.getElementById("ccUsername").value.trim();
+        if (user) window.open(`https://www.codechef.com/users/${user}#rating-graph`, '_blank');
+    }
+
+    function addRatingRow() {
+        const date = document.getElementById("ccDate").value, rating = document.getElementById("ccRating").value, stars = document.getElementById("ccStars").value;
+        if (!date || !rating) return alert("Date and Rating required");
+        ratings.push({ id: Date.now(), date, rating, stars });
+        localStorage.setItem("cc_ratings", JSON.stringify(ratings));
+        renderRatings();
+    }
+
+    function renderRatings() {
+        const body = document.getElementById("ratingTableBody"); body.innerHTML = "";
+        ratings.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(r => {
+            body.innerHTML += `<tr><td>${r.date}</td><td>${r.rating}</td><td>${r.stars}</td><td><button class="delete" style="float:none;" onclick="delRating(${r.id})">Delete</button></td></tr>`;
+        });
+    }
+
+    function delRating(id) { 
+        ratings = ratings.filter(r => r.id !== id); 
+        localStorage.setItem("cc_ratings", JSON.stringify(ratings)); 
+        renderRatings(); 
+    }
+
+    /* --- Marks Adder --- */
+    function calcCombined() {
+        const im = Number(document.getElementById("intM").value), it = Number(document.getElementById("intT").value);
+        const em = Number(document.getElementById("extM").value), et = Number(document.getElementById("extT").value);
+        const res = ((im + em) / (it + et)) * 100;
+        document.getElementById("calcResult").innerText = `Aggregate Percentage: ${res.toFixed(2)}%`;
+    }
+
+    /* --- Pomodoro Logic --- */
+    function startTimer() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if (timeLeft <= 0) { clearInterval(timerInterval); alert("Session over!"); resetTimer(); }
+            else { timeLeft--; const m = Math.floor(timeLeft/60), s = timeLeft%60; document.getElementById("timer").innerText = `${m}:${s < 10 ? '0' : ''}${s}`; }
+        }, 1000);
+    }
+    function pauseTimer() { clearInterval(timerInterval); }
+    function resetTimer() { pauseTimer(); timeLeft = 1500; document.getElementById("timer").innerText = "25:00"; }
+
+    window.onload = () => { if (sessionStorage.getItem("activeUser")) launchApp(); };
+</script>
+</body>
+</html>
